@@ -26,13 +26,15 @@ func main() {
 
 	fmt.Println("Server listening on port 4221")
 
-	conn, err := listener.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			continue
+		}
 
-	handleConnection(conn)
+		handleConnection(conn)
+	}
 }
 
 func handleConnection(conn net.Conn) {
@@ -44,16 +46,21 @@ func handleConnection(conn net.Conn) {
 
 	request := parseRequest(totalBytesRead, &buffer)
 
-	var response string
+	response := "HTTP/1.1 404 Not Found\r\n\r\n"
 
 	if request.method == "GET" {
-		if request.path == "/" || request.path == "/index.html" {
+		pathRoot := strings.Split(request.path, "/")
+		switch pathRoot[1] {
+		case "", "index.html":
 			response = "HTTP/1.1 200 OK\r\n\r\n"
-		} else {
+		case "echo":
+			responseBody := strings.Join(pathRoot[2:], "/")
+			response = buildResponse(responseBody)
+		case "user-agent":
+			response = buildResponse(request.userAgent)
+		default:
 			response = "HTTP/1.1 404 Not Found\r\n\r\n"
 		}
-	} else {
-		response = "HTTP/1.1 404 Not Found\r\n\r\n"
 	}
 
 	conn.Write([]byte(response))
@@ -75,4 +82,8 @@ func parseRequest(totalBytesRead int, buffer *[]byte) Request {
 		accept:      strings.Replace(request[3], "Accept: ", "", 1),
 		content:     request[4],
 	}
+}
+
+func buildResponse(requestContent string) string {
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n", len(requestContent), requestContent)
 }
